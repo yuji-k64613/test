@@ -1,0 +1,674 @@
+https://www.postgresql.jp/
+https://www.postgresql.jp/document/9.6/html/index.html
+→III. サーバの管理
+
+PostgreSQL 9.6.5文書
+https://pgsql-jp.github.io/jpug-doc/9.6.5/postgresql-9.6.5-A4.pdf
+
+https://lets.postgresql.jp/
+現場で役立つ実践ノウハウWeb開発の「べし」「べからず」
+https://lets.postgresql.jp/documents/tutorial/dos-and-donts/1
+
+OSS-DB Exam Gold 技術解説無料セミナー
+https://www.oss-db.jp/news/event/image/20150905_01.pdf
+
+################################################################################
+# pgsql-9.6インストール
+################################################################################
+#
+# CentOS で PostgreSQL を使ってみよう
+# https://lets.postgresql.jp/documents/tutorial/centos/1
+#
+systemctl stop firewalld
+systemctl disable firewalld
+sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
+shutdown -r now
+
+yum update -y
+yum install -y \
+curl \
+git \
+vim \
+unzip
+
+# https://www.postgresql.org/download/linux/redhat/
+cd /tmp
+curl -O https://download.postgresql.org/pub/repos/yum/9.6/redhat/rhel-7-x86_64/pgdg-centos96-9.6-3.noarch.rpm
+rpm -ivh pgdg-centos96-9.6-3.noarch.rpm
+yum install -y postgresql96 postgresql96-server
+yum install -y postgresql96-contrib
+yum install -y postgresql96-devel
+
+/usr/pgsql-9.6/bin/postgresql96-setup initdb
+systemctl enable postgresql-9.6
+systemctl start postgresql-9.6
+
+echo 'PATH=$PATH:/usr/pgsql-9.6/bin' >> /var/lib/pgsql/.bash_profile
+
+#
+# yum標準を使用する場合
+#
+#yum update -y
+#yum install -y \
+#curl \
+#git \
+#vim \
+#unzip
+#yum install -y \
+#postgresql-libs \
+#postgresql \
+#postgresql-server
+## pgstatindexを使うために必要
+# yum install -y postgresql-contrib
+#
+## データベース初期化
+#ls -l /var/lib/pgsql/data
+#postgresql-setup initdb
+#find /var/lib/pgsql/data | tee /tmp/dir.log
+#　サービスの起動
+#systemctl start postgresql-9.6
+#systemctl enable postgresql-9.6
+#systemctl status postgresql-9.6
+
+# 設定ファイルのバックアップ
+cp -p /var/lib/pgsql/9.6/data/postgresql.conf{,.bak}
+cp -p /var/lib/pgsql/9.6/data/pg_hba.conf{,.bak}
+
+# 接続確認
+su - postgres
+psql --version
+# psql (PostgreSQL) 9.6.6
+psql -l
+exit
+
+# DB用のユーザ作成
+useradd -m dbuser
+passwd dbuser
+
+# ユーザ（ロール）を設定
+su - postgres
+createuser --createdb --createrole --pwprompt dbuser
+exit
+
+# データベースを作成
+su - dbuser
+createdb mydb
+psql -l | grep mydb
+exit
+
+# ログ
+ls /var/lib/pgsql/9.6/data/pg_log/postgresql-*.log
+tail $(ls /var/lib/pgsql/9.6/data/pg_log/postgresql-*.log)
+
+# ログに日付を付ける
+su - postgres
+sed -i 's/^log_line_prefix/#log_line_prefix/' /var/lib/pgsql/9.6/data/postgresql.conf
+echo "log_line_prefix = '%t %d [%p-%l]  '" >> /var/lib/pgsql/9.6/data/postgresql.conf
+exit
+
+#
+# PostgreSQLのトラブルシュートとチューニング
+# https://lets.postgresql.jp/documents/tutorial/troubleshoot/1
+#
+
+# 「max_connections」を超えて接続した場合のエラー
+[dbuser@localhost ~]$ psql mydb
+psql: FATAL:  スーパーユーザによる接続用に予約される接続スロットの数を設定します。
+
+初期は、
+max_connections = 100
+なので、Jboss側のコネクションプールの値を考慮して設定する。
+
+################################################################################
+# PostgreSQLの導入と初期設定
+################################################################################
+https://lets.postgresql.jp/documents/tutorial/introduction/1
+#
+# パラメータに関するチェックリスト
+#
+
+#
+# SHMALL, SHMMAX を増やしましたか?
+#
+# SHMMAX: 共有メモリセグメントの最大サイズ（バイト）
+# SHMALL: 使用可能な共有メモリの総量（バイトまたはページ）
+# https://www.postgresql.jp/document/9.4/html/kernel-resources.html
+
+# 値の確認
+sysctl kernel.shmmax
+sysctl kernel.shmall
+
+# 参考) ページサイズ取得
+getconf PAGE_SIZE
+「4096」以外なら、"huge pages"を持つ通常ではないカーネル設定である。
+→★SHMMAXの単位は、バイトである。
+→★SHMALLの単位は、ページサイズである。
+
+「最小でも1キロバイト」なので、デフォルトで足りてるハズ
+
+# 参考)
+http://www.chikkun.com/und/document/etc/PostgreSQLTuning.html
+
+#
+# pg_hba.conf は確認しましたか?
+#
+su - postgres
+echo "listen_addresses = '*'" >> /var/lib/pgsql/9.6/data/postgresql.conf
+sed -i '/^# IPv4 local connections:/,/^# IPv6 local connections:/s:^host.*:host    all             all             0.0.0.0/0            password:' /var/lib/pgsql/9.6/data/pg_hba.conf
+
+#
+# listen_address は確認しましたか?
+#
+「pg_hba.conf は確認しましたか?」で解決
+
+#
+# shared_buffers を環境に合わせて設定しましたか?
+#
+#https://www.postgresql.jp/document/9.6/html/runtime-config-resource.html#RUNTIME-CONFIG-RESOURCE-MEMORY
+1GB以上のRAMを載せた専用データベースサーバを使用している場合、
+shared_buffersに対する妥当な初期値はシステムメモリの25%です
+
+# shared_buffersに設定するメモリ量取得(システムメモリの25%)
+mem=$(grep ^MemTotal /proc/meminfo | awk '{print $2/4, $3}' | sed 's/ //' | sed 's/kb/kB/i')
+echo $mem
+
+# shared_buffersに設定するメモリ量設定
+sed -i "s/^shared_buffers *= *[0-9]*[a-zA-Z]*/shared_buffers = ${mem}/" /var/lib/pgsql/9.6/data/postgresql.conf
+
+#
+# max_fsm_pages をデータベース容量に合わせて設定しましたか?
+#
+v8.3以前の設定のため不要
+
+#
+# バックアップに関するチェックリスト
+#
+
+#
+# アーカイブログは取得していますか?
+#
+WALアーカイブとは
+これはPostgreSQLが出力したトランザクションログ(WAL)ファイルを別の場所にコピーすることです。
+WALファイルはデフォルト設定では直近の一定数しか保存されず、古くなったものは
+削除もしくは再利用されていきます。そのため、リカバリに使えるようにWALファイルを
+別の場所に保存しておく必要があります。
+→オンラインバックアップするなら必要
+
+echo 'archive_mode = on' >> /var/lib/pgsql/9.6/data/postgresql.conf
+echo "archive_command = 'test ! -f /mnt/server/archivedir/%f && cp %p /mnt/server/archivedir/%f'" >> /var/lib/pgsql/9.6/data/postgresql.conf
+exit
+
+mkdir -p /mnt/server/archivedir
+chown -R postgres:postgres /mnt/server
+
+ %pはアーカイブするファイルのパス名
+ %fはファイル名部分
+
+#Nov 26 13:34:19 localhost pg_ctl: 2017-11-26 13:34:19 JST  [20597-1]  FATAL:  WAL アーカイブ(archive_mode=on) では wal_level を "archive" または "hot_standby"
+にする必要があります
+# 上記のエラー(/var/log/message)が発生するので、以下を追加。
+su - postgres
+echo 'wal_level = archive' >> /var/lib/pgsql/9.6/data/postgresql.conf
+
+#
+# pg_dump を定期的に実行していますか?
+#
+pg_dump -Fc database名 > バックアップファイル名
+pg_restore -C -d database名 < バックアップファイル名
+
+-cはcustom形式(圧縮される)を表す。-tとするとtar形式
+
+#
+# メンテナンスに関するチェックリスト
+#
+
+#
+# autovacuum を有効にしましたか?
+#
+echo 'autovacuum = on' >> /var/lib/pgsql/9.6/data/postgresql.conf
+
+　→その他のautovacuum関連のパラメータは、要検討
+
+#
+# 1日1回 vacuumdb をしていますか?
+#
+vacuumdb --all --quiet --analyze
+→cronで一日一回実行?
+→--fullは使わない。
+#db指定: --dbname=mydb
+
+　→autovacuumが有効なら不要?
+
+#
+# VACUUM のコスト遅延を設定しましたか?
+#
+# 20秒以上かかった場合にログに出力
+# https://lets.postgresql.jp/documents/technical/log_setting
+echo 'log_autovacuum_min_duration = 20000' >> /var/lib/pgsql/9.6/data/postgresql.conf
+
+#
+# VACUUM FULLは止めましたか?
+#
+毎日のように頻繁に VACUUM FULL, CLUSTER, REINDEX をするのは間違った運用
+→どのタイミングですれば良いのか。
+
+#
+# 監視に関するチェックリスト
+#
+
+#
+# サーバログは保存していますか?
+#
+# https://lets.postgresql.jp/documents/technical/log_setting
+とりあえずの値で設定
+cat << EOF >> /var/lib/pgsql/9.6/data/postgresql.conf
+log_destination = 'stderr'
+logging_collector = on
+log_directory = 'pg_log'
+log_rotation_age = 1d
+log_min_error_statement = 'error'
+EOF
+exit
+systemctl restart postgresql-9.6
+
+# これも設定した方が良い(許容できないSQLレスポンス時間)
+# https://lets.postgresql.jp/documents/technical/query_analysis/1
+log_min_duration_statement
+
+#
+# ディスク領域を監視していますか?
+#
+・$PGDATA: /var/lib/pgsql/data
+・各テーブルスペース: ※1
+・pg_xlog: /var/lib/pgsql/data/pg_xlog
+・アーカイブ先のディスクの容量: /mnt/server/archivedir/
+
+※1 各データベースの物理容量(Bytes)
+su -  postgres
+join -1 1 -2 1 -e "" \
+<(echo 'select datid,datname from pg_stat_database' | psql | grep '^ *[0-9]' | sed 's/  *//' | sort) \
+<((cd /var/lib/pgsql/9.6/data/base/; du -s -b *) | awk '{ print $2" "$1"" }' | sort) \
+| sed 's/.*| *//' | sort
+exit
+
+→監視は、Hinemos?
+→どの項目を監視するか(p199)。
+
+################################################################################
+# 監視
+################################################################################
+https://www.ashisuto.co.jp/db_blog/article/20151221_pg_monitoring.html
+監視ツールでPostgreSQLを監視する際に最低限押さえておきたい監視項目は以下の3つです。
+1. プロセスの監視
+2. ログファイルの監視
+3. ディスク空き容量の監視
+
+9.3から。PostgreSQLサーバの接続状態を検査する。
+pg_isready -h localhost -p 5432
+
+################################################################################
+# 統計情報
+################################################################################
+https://lets.postgresql.jp/documents/technical/statistics
+
+#
+# インデックス再作成
+#
+REINDEX DATABASE データベース名;
+REINDEX TABLE テーブル名;
+REINDEX INDEX インデックス名;
+
+https://lets.postgresql.jp/documents/tutorial/introduction/1
+毎日のように頻繁に VACUUM FULL, CLUSTER, REINDEX をするのは間違った運用です。
+autovacuum に任せるなど、十分な頻度で VACUUM を行えば、
+これらの再編成処理は必要なくなるはずです。
+
+su - postgres
+psql mydb
+CREATE EXTENSION pgstattuple;
+
+# テーブル
+create table mytable (
+	id integer,
+	name1 varchar,
+	name2 varchar,
+	name3 varchar,
+	num1 integer,
+	num2 integer,
+	num3 integer,
+	primary key(id)
+);
+# インデックス
+CREATE INDEX mytable_num_index ON mytable (num1, num2, num3);
+
+# インデックスの断片化確認
+analyze;
+\x
+select * from pgstatindex('mytable_pkey');
+select * from pgstatindex('mytable_num_index');
+\x
+
+　・avg_leaf_density: リーフページの平均密度（%）
+　・leaf_fragmentation: リーフページの断片化割合（低い方がよい）
+
+# インデックス再作成
+reindex index mytable_pkey;
+reindex index mytable_num_index;
+# インデックスの断片化確認
+analyze;
+\x
+select * from pgstatindex('mytable_pkey');
+select * from pgstatindex('mytable_num_index');
+\x
+
+# クラスタ性の欠落確認
+analyze;
+select tablename, attname, correlation from pg_stats where tablename = 'mytable' order by attname;
+
+　・-1：降順
+　・ 0：ランダム
+　・ 1：昇順
+
+# クラスタ
+cluster mytable using mytable_pkey;
+cluster mytable using mytable_num_index;
+analyze;
+select tablename, attname, correlation from pg_stats where tablename = 'mytable' order by attname;
+
+#
+# 実行計画
+#
+
+
+#
+# チューニング
+#
+https://www.ashisuto.co.jp/db_blog/article/20160603_max_wal_size.html
+checkpoint_segments
+（デフォルトは3）
+→減らすと性能は落ちるが、ディスクに書き込む頻度は上がる
+
+checkpoint_timeout = 3min
+（デフォルトは5分）
+→減らすと性能は落ちるが、ディスクに書き込む頻度は上がる
+
+archive_timeout = 300
+（デフォルトは0）
+→デフォルのままだと、少量のcommitのみでアクセスが無い場合、
+　いつまでたってもarchive_commandが実行されない。
+ 設定してしまうと、commitが無くても定期的にarchive_commandが実行されてしまう。
+ 通常１分程度のarchive_timeout設定が妥当です。
+#9.5>=の場合、以下を設定する
+#max_wal_size
+#min_wal_size
+
+# 仮
+checkpoint_timeout = 1min
+archive_timeout = 1min
+→この設定だと、最低でも16MB * 24 * 60のバックアップ領域が必要
+
+################################################################################
+# バックアップ/リカバリ
+# →コールドバックアップ＋WALアーカイブのオンラインバックアップ
+# →ポイントインタイムリカバリ（PITR）
+################################################################################
+https://www.postgresql.jp/document/9.6/html/backup.html
+#
+# 構築後のバックアップ
+#
+以下のセットダウン(日々)、セットアップ(日々)を実行
+
+#
+# セットダウン(日々)
+#
+# 事前準備
+rm -fr /tmp/backup/
+mkdir -p /tmp/backup/
+chown -R postgres:postgres /tmp/backup
+# セットダウン
+systemctl stop postgresql-9.6
+systemctl status postgresql-9.6
+# 環境を修正する場合、このタイミングで。
+# バックアップ
+cp -pr /var/lib/pgsql/9.6/data /tmp/backup
+rm -fr /mnt/server/archivedir/*
+
+#
+# セットアップ(日々)
+#
+systemctl start postgresql-9.6
+systemctl status postgresql-9.6
+# WALをバックアップさせるためリスタート
+systemctl restart postgresql-9.6
+systemctl status postgresql-9.6
+# WALがバックアップされるまで待つ(再度、ディスク障害が起きた場合に備えて、アーカイブができるまで待つ)
+# 念のため
+while [ $(ls /mnt/server/archivedir/ | wc -l) -eq 0 ]; do sleep 1; done; echo 'done'
+# ログの確認
+tail "/var/lib/pgsql/9.6/data/pg_log/"$(ls -ltr /var/lib/pgsql/9.6/data/pg_log/ | tail -1 | sed 's/.* //')
+
+#
+# 擬似的に障害発生
+#
+ps -e -o pid,cmd | grep '[/]usr/pgsql-9.6/bin' | awk '{print $1}' | xargs kill -9
+#ps -e -o pid,cmd | grep '[0-9][0-9]* *postgres' | awk '{print $1}' | xargs kill -9
+ps -ef | grep '[p]ostgres'
+
+#
+# 復旧(ディクスクラッシュ)
+# →プロセスが落ちた場合は、再起動するだけ
+#
+systemctl stop postgresql-9.6
+systemctl status postgresql-9.6
+# バックアップ時の状態に戻す
+rm -fr /var/lib/pgsql/9.6/data
+cp -pr /tmp/backup/data /var/lib/pgsql/9.6/data
+# WALファイルを削除
+ls -ltr /var/lib/pgsql/9.6/data/pg_xlog
+rm -fr /var/lib/pgsql/9.6/data/pg_xlog
+mkdir -p /var/lib/pgsql/9.6/data/pg_xlog
+mkdir -p /var/lib/pgsql/9.6/data/pg_xlog/archive_status
+chown -R postgres:postgres /var/lib/pgsql/9.6/data/pg_xlog
+ls -ltr /var/lib/pgsql/9.6/data/pg_xlog/
+# バックアップ先のWALファイルをコピー
+ls -ltr /mnt/server/archivedir/
+cp -pr /mnt/server/archivedir/* /var/lib/pgsql/9.6/data/pg_xlog/
+ls -ltr /var/lib/pgsql/9.6/data/pg_xlog/
+# バックアップ先のWALファイルを削除(ファイルが存在しているとarchive_commandがエラーとなる)
+rm -fr /mnt/server/archivedir/*
+# 復旧のコマンドを作成
+echo "restore_command = 'cp /tmp/wal/%f %p'" > /var/lib/pgsql/9.6/data/recovery.conf
+chown postgres:postgres /var/lib/pgsql/9.6/data/recovery.conf
+# postgresql起動(リカバリの実行)
+systemctl start postgresql-9.6
+# リカバリの確認
+systemctl status postgresql-9.6
+ls /var/lib/pgsql/9.6/data/ | grep "^recovery.done$"
+rm /var/lib/pgsql/9.6/data/recovery.done
+## WALをバックアップさせるためリスタート
+#→セットダウン(日々)、セットアップ(日々)を実行するため不要
+#systemctl restart postgresql-9.6
+#systemctl status postgresql-9.6
+## ログの確認
+#tail "/var/lib/pgsql/9.6/data/pg_log/"$(ls -ltr /var/lib/pgsql/9.6/data/pg_log/ | tail -1 | sed 's/.* //')
+## WALがバックアップされるまで待つ(再度、ディスク障害が起きた場合に備えて、アーカイブができるまで待つ)
+## 念のため
+#while [ $(ls /mnt/server/archivedir/ | wc -l) -eq 0 ]; do sleep 1; done; echo 'done'
+#
+セットダウン(日々)、セットアップ(日々)を実行
+→バックアップを取得するため
+
+################################################################################
+# ベンチマークツール
+################################################################################
+https://lets.postgresql.jp/documents/technical/contrib/pgbench
+# データベースを作成
+su - dbuser
+createdb testdb
+psql -l | grep testdb
+
+# データをロード
+pgbench -i testdb
+
+# ベンチマークを実行
+pgbench -c 10 -t 1000 testdb
+→同時に10本の接続
+→各接続あたり1000回のトランザクション
+(tps=1秒あたりのトランザクション数)
+
+# 接続数を変化させて、トランザクション数／秒を測定
+#!/bin/sh
+for i in 1 2 4 8 16 32 64
+do
+echo -n "$i	"
+#pgbench -p 5432 -n -S -T 60 -c $i testdb | grep "excluding" | awk '{print $3}'
+pgbench -c $i -t 1000 testdb | grep "excluding" | awk '{print $3}'
+done
+
+# 独自テーブル、独自スクリプト
+# テーブル作成
+psql testdb
+create table mytable (
+	id integer,
+	name1 varchar,
+	name2 varchar,
+	name3 varchar,
+	num1 integer,
+	num2 integer,
+	num3 integer,
+	primary key(id)
+);
+
+# データ作成シェル
+cat << 'EOF' > /tmp/foo.sh
+#!/bin/bash
+N=10000
+for n in $(seq $N)
+do
+        r1=$(( $(od -vAn -N4 -tu4 < /dev/urandom) % $N ))
+        r2=$(( $(od -vAn -N4 -tu4 < /dev/urandom) % $N ))
+        r3=$(( $(od -vAn -N4 -tu4 < /dev/urandom) % $N ))
+        echo "${n}	name${r1}	name${r2}	name${r3}	${r1}	${r2}	${r3}"
+done
+EOF
+chmod +x /tmp/foo.sh
+
+# スクリプト作成(古いpostgres)
+cat << EOF > /tmp/foo.pgbench
+\setrandom id 1 :scale
+\set range 10 * :scale
+\setrandom val 1 :range
+\set  val2 :range / 2
+BEGIN;
+UPDATE mytable SET num1 = :val WHERE id = :id;
+SELECT * FROM mytable WHERE num1 > :val2 order by id;
+END;
+EOF
+
+# スクリプト作成
+cat << EOF > /tmp/foo.pgbench
+\set id random(1, :scale)
+\set range 10 * :scale
+\set val random(1, :range)
+\set  val2 :range / 2
+BEGIN;
+UPDATE mytable SET num1 = :val WHERE id = :id;
+SELECT * FROM mytable WHERE num1 > :val2 order by id;
+END;
+EOF
+
+# データ作成
+/tmp/foo.sh > /tmp/input.csv
+psql testdb
+COPY mytable FROM '/tmp/input.csv' DELIMITER E'\t';
+\q
+
+# 実行(スケールは、10000)
+pgbench -c 10 -t 1000 -s 10000 --no-vacuum -f /tmp/foo.pgbench testdb
+
+################################################################################
+# CSVのインポート、エクスポート
+################################################################################
+https://qiita.com/cyborg__ninja/items/99efcb5b62a4cef2f156
+
+su - postgres
+psql testdb
+COPY mytable FROM '/tmp/input.csv' DELIMITER E'\t';
+COPY mytable TO '/tmp/output.csv';
+exit
+
+################################################################################
+# pg_statsinfo, pg_stats_reporter
+################################################################################
+https://sourceforge.net/projects/pgstatsinfo/files/
+https://www.slideshare.net/kkida85/postgre-sql-slideshare
+https://www.postgresql.jp/sites/default/files/2017-01/B1_PGCON_JP_kondo_nttoss.pdf
+http://pgstatsinfo.sourceforge.net/documents/reporter3.1/html/pg_stats_reporter-ja.html
+
+# インストール
+rpm -ivh pg_statsinfo-3.3.0-1.pg96.rhel7.x86_64.rpm
+
+# 設定
+su - postgres
+sed -i 's/^log_filename/#log_filename/' /var/lib/pgsql/9.6/data/postgresql.conf
+cat << 'EOF' >> /var/lib/pgsql/9.6/data/postgresql.conf
+dynamic_library_path = '/usr/pgsql-9.6/lib:$libdir'
+shared_preload_libraries = 'pg_statsinfo' # 事前ロードを行う
+log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log' # ログファイル名を指定する
+EOF
+sed -i '/^# IPv6 local connections:/,/^# Allow/s!^host.*!host    all             all             ::1/128                 password!' /var/lib/pgsql/9.6/data/pg_hba.conf
+exit
+
+systemctl restart postgresql-9.6
+ps -ef | grep '[p]g_statsinfo'
+
+# postgresユーザにパスワードを設定
+su - postgres
+psql
+alter role postgres with password 'postgres';
+\q
+
+# 収集(しばらく動かしてから)
+pg_statsinfo -r ALL -h localhost -d postgres -p 5432 -U postgres > output.txt
+exit
+
+#
+# pg_stats_reporter
+#
+# インストール
+yum install -y php php-pgsql php-common httpd
+rpm -ivh pg_stats_reporter-3.3.1-1.el7.noarch.rpm
+
+# 設定
+cp -p /etc/pg_stats_reporter.ini{,.bak}
+sed -i '/^;password/apassword = postgres' /etc/pg_stats_reporter.ini
+
+# 自動Vacuumの情報を収集
+https://www.postgresql.jp/document/9.3/html/runtime-config-autovacuum.html
+log_autovacuum_min_duration = 0
+
+# チェックポイントの情報を収集
+https://www.postgresql.jp/document/9.2/html/sql-checkpoint.html
+https://qiita.com/nattof/items/85d5d304de11e3d396eb
+log_checkpoints = on
+
+# Lock Conflictsの情報を収集
+pg_statsinfo.long_lock_threashold = 30s
+
+# アラート機能の閾値を修正(instidは、レポートの表示を見ればわかるハズ)
+http://pgstatsinfo.sourceforge.net/documents/statsinfo3.1/pg_statsinfo-ja.html#usage-alert
+UPDATE statsrepo.alert SET commit_tps = 10 WHERE instid = 1;
+
+# pg_statsinfo取得項目
+http://dbstudychugoku.github.io/pdf/20140713_postgre_tuning.pdf
+https://www.pgecons.org/wp-content/uploads/PGECons/2015/WG3/PGECons_2015_WG3_DBTools_appendix_chapter4s.pdf
+
+# 収集
+rm -fr /tmp/output/
+mkdir /tmp/output/
+pg_stats_reporter -R sample -a -O /tmp/output -B "2017-12-25 00:00:00"
+(cd /tmp; tar cvf output.tar output)
+
+################################################################################
+# ワーク
+################################################################################

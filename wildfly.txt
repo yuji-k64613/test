@@ -1,0 +1,935 @@
+###############################################################################
+# JBossチューニングの参考資料
+###############################################################################
+https://www.ibm.com/support/knowledgecenter/ja/SS6PEW_9.5.0/com.ibm.help.perf.manage.doc/performance/c_FND_PM_JBossTuning.html
+
+・ユーザーは JBoss Application Server を熟知しており、かつクラスター・モードで
+　インストールしてあること。
+・ユーザーは、「JBoss Administration and Configuration Guide」を読んでいること。
+・ユーザーは、「Performance Tuning Guide for JBoss」を読んでいること。
+
+# JBoss Administration and Configuration Guide
+https://access.redhat.com/documentation/ja-jp/red_hat_jboss_enterprise_application_platform/7.0/pdf/configuration_guide/Red_Hat_JBoss_Enterprise_Application_Platform-7.0-Configuration_Guide-ja-JP.pdf
+
+# Performance Tuning Guide for JBoss
+https://access.redhat.com/documentation/ja-jp/red_hat_enterprise_linux/7/pdf/performance_tuning_guide/Red_Hat_Enterprise_Linux-7-Performance_Tuning_Guide-ja-JP.pdf
+
+#
+# JBoss チューニングの考慮事項
+#
+https://www.ibm.com/support/knowledgecenter/ja/SS4QMC_9.5.0/com.ibm.help.perf.manage.doc/performance/c_FND_PM_JBossTuningConsiderations.html
+
+・ホット・デプロイメントのスキャンを使用不可にする。
+・準備済みステートメント・キャッシュと接続プーリングをセットアップする。
+・適宜 Web コンテナー・スレッド・プールを設定する。currentThreadsBusy パラメーターを監視する。
+　これが増えている場合は、スレッド・プールと接続プールを監視する。
+・log4j の設定を削減する (コンソール・アペンダーをオフにする、重大度を WARN から ERROR に下げる)。
+・メール・サービスを使用不可にする。
+・Hypersonic JBoss EAP 5 データベースを使用不可にする。
+・JBoss Messaging を使用していなければ、同様に使用不可にする。
+・XA データ・ソースを使用不可にする (Sterling Supply Chain アプリケーションでは
+　XAデータ・ソースは未使用)。
+・不要なら、スケジューラー・サービスを使用不可にする。
+
+→JBoss 接続プーリング
+→JBoss チューニング: Sterling Selling and Fulfillment Foundation でのデータ・ソースの定義
+
+https://access.redhat.com/documentation/en-us/red_hat_jboss_enterprise_application_platform/
+https://access.redhat.com/documentation/ja-jp/red_hat_jboss_enterprise_application_platform/7.0/pdf/development_guide/Red_Hat_JBoss_Enterprise_Application_Platform-7.0-Development_Guide-ja-JP.pdf
+
+#
+# JBossDeveloper
+#
+WildFlyよくある質問
+https://developer.jboss.org/wiki/WildFlyFAQJapanese
+
+#
+# アプリケーションサーバ JBoss超入門 - 日立ソリューションズ
+#
+http://www.hitachi-solutions.co.jp/redhat/sp/download/pdf/osc2013-nagoya.pdf
+
+#
+# 第7回 JBoss EAP 6 運用管理で押さえておきたい情報
+#
+http://www.hitachi-solutions.co.jp/redhat/sp/column/vol07/
+①JavaVMスレッドプール情報
+②JavaVMメモリ情報
+③データベースプール情報
+
+#
+# 参考
+#
+http://www.hitachi-solutions.co.jp/redhat/sp/column/vol02/
+http://rikutoto.blogspot.jp/search/label/JBoss
+http://luozengbin.github.io/blog/2015-04-01-%5B%E3%81%BE%E3%81%A8%E3%82%81%5Djbossas%E9%81%8E%E8%B2%A0%E8%8D%B7%E6%99%82tcp%E3%82%B3%E3%83%8D%E3%82%AF%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%AE%E6%8C%AF%E3%82%8B%E8%88%9E%E3%81%84.html
+
+###############################################################################
+# 設定方法
+###############################################################################
+#
+# 初期設定
+#
+unzip wildfly-11.0.0.Final.zip
+ln -s wildfly-11.0.0.Final wildfly
+# 必要に応じてchown wildfly
+cd wildfly
+「# デフォルトインターフェース設定」参照
+
+./bin/add-user.sh -u admin -p password -g admin
+→adminを更新。adminグループに登録(mgmt-users.properties, mgmt-users.properties)
+
+#
+# 起動・停止
+#
+./bin/standalone.sh
+./bin/jboss-cli.sh --connect --command=:shutdown
+
+# 管理コンソール
+http://localhost:9990/
+
+# 管理モード(使わない?)
+./bin/standalone.sh --admin-only
+
+# 起動設定ファイル指定(使わない?)
+このスタンドアロン設定ファイルには、メッセージングおよび高可用性を含
+むすべてのサブシステムのサポートが含まれます。
+./bin/standalone.sh --server-config=standalone-full.xml
+
+# ドメインを使う場合(使わない?)
+./bin/domain.sh --host-config=host-master.xml
+
+#
+# ユーザ
+#
+admin作成済み
+
+#
+# CLIコマンド
+#
+https://access.redhat.com/documentation/en-us/red_hat_jboss_enterprise_application_platform/7.0/pdf/management_cli_guide/Red_Hat_JBoss_Enterprise_Application_Platform-7.0-Management_CLI_Guide-en-US.pdf
+
+./bin/jboss-cli.sh --connect
+
+cn (or cd)             - change the current node path to the argument;
+connect                - connect to the server or domain controller;
+deploy                 - deploy an application;
+help (or h)            - print this message;
+history                - print or disable/enable/clear the history expansion;
+ls                     - list the contents of the node path;
+pwn (or pwd)           - prints the current working node;
+quit (or q)            - quit the command line interface;
+undeploy               - undeploy an application;
+version                - prints the version and environment information.
+
+#
+# Management Model
+#
+Management Model機能は管理コンソールのフッターメニュー、Tools > Management Modelから
+利用することが可能です。
+→CLIで設定できる設定が分かる
+→設定方法は、https://docs.jboss.org/author/display/AS71/CLI+Recipes
+
+#
+# スナップショット(使わない?)
+#
+./bin/jboss-cli.sh --connect --command=:take-snapshot
+./bin/jboss-cli.sh --connect --command=:list-snapshots
+
+#
+# 3.4.5. 設定変更の確認
+#
+JBoss EAP 7 には、稼働中のシステムに加えられた設定変更を追跡する機能があります。
+この機能 を使用すると、管理者は他の許可されたユーザーが追加した設定変更の履歴を
+確認することができます。
+
+★変更はメモリーに保存され、サーバーを再起動すると永続化されません。
+この機能は管理監査ログの代替機能ではありません。
+→GUIでの変更は永続化されている
+
+#
+# ファイルシステムパス
+#
+# オペレーションの一覧を取得
+/path=jboss.server.log.dir:read-operation-names
+# オペレーションのパラメータを取得
+/path=jboss.server.log.dir:read-operation-description(name=add)
+# 実行
+/path=jboss.server.log.dir:add(path=/tmp/log)
+→上書きはできない
+
+# 標準パスの上書き
+サーバーの起動時にコマンドライン引数を渡す
+サーバー設定ファイル (standalone.conf または domain.conf) の JAVA_OPTS 変数を編集する。
+→JAVA_OPTS="${JAVA_OPTS} -Djboss.server.log.dir=/tmp/log"
+
+#
+# 3.7. 管理監査ロギング(使わない?)
+#
+管理コンソール、管理 CLI、または管理 API を使用するカスタムアプリケーションを使用して
+実行されたすべての操作をログに記録する、管理インターフェースの監査ロギングを有効にできます。
+監査ログエントリーは JSON 形式で保存されます。監査ロギングはデフォルトでは無効に
+なってい ます。
+
+#
+# デフォルトインターフェース設定
+#
+sed -i 's!<inet-address value="${jboss.bind.address.management:127.0.0.1}"/>!<any-address/>!' /opt/wildfly/standalone/configuration/standalone.xml
+sed -i 's!<inet-address value="${jboss.bind.address:127.0.0.1}"/>!<any-address/>!' /opt/wildfly/standalone/configuration/standalone.xml
+→上記は、全てのIPアドレスから接続可能。必要に応じて、変更すること。
+→httpdからの接続のみを許可すれば良い?
+
+起動時に設定は、
+-Djboss.bind.address=IP_ADDRESS
+
+#
+# セキュリティ
+#
+ToDo
+
+#
+# モジュール
+#
+JBoss EAP は、既存プロファイルの設定からサブシステムを削除して、
+エクステンショ ンを無効にしたり、ドライバーやその他のサービスを手作業で
+アンロードしたりする機 能を提供しますが、ほとんどの場合でこれは必要ありません。
+JBoss EAP は必要時にサ ブシステムを動的にロードするため、
+サーバーまたはアプリケーションがサブシステムを使用しないと、
+そのサブシステムはロードされません。
+→よって、モジュールは、カスタマイズしない。
+
+#
+# JDBCドライバ
+#
+JDBC ドライバーをコアモジュールとしてインストールする方法が推奨されます。
+
+module 管理 CLI コマンドを使用したモジュールの追加および削除は、
+技術プレ ビューとしてのみ提供されています。本番環境では、
+モジュールを手動で追加および削除する必要があります。
+→結局、モジュールを手動で追加が正解と思われる。
+
+# GUIでのドライバー追加
+Deployment->Add
+
+# CLIでのドライバー追加
+./bin/jboss-cli.sh --connect 'deploy /tmp/postgresql-42.1.1.jar'
+#cat /tmp/jboss-cli.txt | /opt/wildfly/bin/jboss-cli.sh
+
+# CLIでのドライバー確認
+# サンプルのドライバ
+/subsystem=datasources/jdbc-driver=h2:read-resource
+# 追加したのドライバ
+/subsystem=datasources/jdbc-driver=postgresql-42.1.1.jar:read-resource
+→何故か表示されない
+
+#
+# デプロイ
+#
+./bin/jboss-cli.sh --connect 'deploy /tmp/myapp.war'
+事前にデータソースの追加が必要「# データソース作成」参照
+
+# ホットデプロイ
+cp /tmp/myapp.war standalone/deployments/
+→ホットデプロイは停止する。
+# 現状確認
+/subsystem=deployment-scanner/scanner=default:read-attribute(name=scan-enabled)
+# 停止
+/subsystem=deployment-scanner/scanner=default:write-attribute(name=scan-enabled, value=false)
+
+#
+# ドメイン
+#
+→使わない想定
+
+#
+# JVM
+#
+./bin/standalone.conf
+→このファイルを修正する。
+
+# ヒープの変更
+JAVA_OPTS="-Xms64m -Xmx512m -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m -Djava.net.preferIPv4Stack=true"
+→「-Xms64m -Xmx512m」を修正する
+
+# JVM 状態の表示(メモリ)
+Runtime->Standalone Server->JVM->View
+・Max: メモリー管理に使用できるメモリーの最大量。
+・Used: 使用されたメモリーの量。
+・Committed: JVM が使用するために確保されたメモリー量。
+
+http://moznion.hatenadiary.com/entry/2016/03/11/121343
+-XX:MaxMetaspaceSize=??M
+Java 8以降だと，かつての「-XX:MaxPermSize」の代わりに設定してやる必要がある．
+Permanent 領域は最大容量が有限だったのに対し，Java 8 以降の Metaspace 領域は
+メモリの許す限りモリモリ消費できてしまうので，最大容量を指定してキャップすることで
+安全側に倒してやる必要がある．
+
+#
+# JMX
+#
+https://duke4j.wordpress.com/2012/06/25/connecting-jmx-on-jboss-as7-1/
+
+#
+# ログ
+#
+# http://www.nailedtothex.org/roller/kyle/entry/articles-wildfly-logger
+./standalone/configuration/logging.properties
+
+# ログの設定確認(CONSOLE)
+/subsystem=logging/console-handler=CONSOLE:read-resource
+# ログレベル変更(CONSOLE)
+/subsystem=logging/console-handler=CONSOLE:change-log-level(level=DEBUG)
+
+# ログの設定確認(FILE)
+/subsystem=logging/periodic-rotating-file-handler=FILE:read-resource
+# ログレベル変更(CONSOLE)
+/subsystem=logging/periodic-rotating-file-handler=FILE:change-log-level(level=DEBUG)
+
+# Size rotating ログハンドラーの追加(名前: MYLOG)
+# ログファイルパス指定
+/subsystem=logging/size-rotating-file-handler=MYLOG:add(file={path=myserver.log,relative-to=jboss.server.log.dir})
+# サイズ指定
+/subsystem=logging/size-rotating-file-handler=MYLOG:write-attribute(name=rotate-size,value=1k)
+# ハンドラ追加
+/subsystem=logging/root-logger=ROOT:add-handler(name=MYLOG)
+# 確認
+/subsystem=logging/size-rotating-file-handler=MYLOG:read-resource
+
+# FILEハンドラを削除
+/subsystem=logging/root-logger=ROOT:remove-handler(name=FILE)
+
+# GCログ
+ガベッジコレクションログのデフォルトの場所は
+EAP_HOME/standalone/log/gc.log.DIGIT.current です。ガベッジコレクションのログは
+3 MB ずつに制限され、最大 5 つのファイルがローテーションされます。
+JBoss EAP スタンドアロンサーバーではデフォルトで有効になっています。
+
+#
+# データソース
+#
+「非XAデータソース」を使用する
+トランザクションを使用しないアプリケーション、または単一のデータベースでトランザ クションを
+使用するアプリケーションに使用されます。
+
+# 既存の設定確認(GUI)
+Datasource->Attributes->Driver: h2
+# 既存の設定確認(CLI)
+/subsystem=datasources/data-source=ExampleDS:read-resource
+
+# データソース作成
+cat /tmp/jboss-cli.txt | /opt/wildfly/bin/jboss-cli.sh
+------------------------------------------------------
+cat << EOF > /tmp/jboss-cli.txt
+connect
+deploy /tmp/postgresql-42.1.1.jar
+data-source add \
+  --name=PostgresDS \
+  --connection-url=jdbc:postgresql://postgres:5432/postgres \
+  --jndi-name=java:jboss/datasources/myappDS \
+  --driver-name=postgresql-42.1.1.jar \
+  --user-name=postgres \
+  --password=password \
+  --jta=true \
+  --enabled=true \
+  --use-ccm=true
+EOF
+------------------------------------------------------
+# 確認
+/subsystem=datasources/data-source=PostgresDS:read-resource
+
+# データソース削除
+data-source remove --name=PostgresDS
+
+# その他、設定
+initial-pool-size
+プールが保持する最初の接続数。
+min-pool-size
+プールが保持可能な最小接続数。
+max-pool-size
+プールが保持可能な最大接続数。
+
+# 確認
+/subsystem=datasources/data-source=PostgresDS:read-attribute(name=initial-pool-size)
+
+# 設定
+/subsystem=datasources/data-source=PostgresDS:write-attribute(name="initial-pool-size", value=10)
+
+blocking-timeout-wait-millis
+接続待機中にブロックする最大時間数 (ミリ秒単 位) を指定します。この時間を超過すると、例外が
+発生します。これは、接続のロックを待っている 間のみブロックし、新規接続の作成に長時間要し
+ている場合は例外は発生しません。
+
+idle-timeout-minutes
+接続が閉じられるまでのアイドル最大時間 (分単 位) を指定します。実際の最大時間は、
+IdleRemover スキャン時間 (プールの最小 idle- timeout-minutes の半分) に基づきます。
+
+set-tx-query-timeout
+トランザクションがタイムアウトするまでの残り時間を基にクエリーのタイムアウトを設定するか
+どうかを指定します。トランザクションが存在しない場合は設定済みのクエリーのタイムアウトが
+使用されます。
+
+query-timeout
+クエリーのタイムアウト (秒単位)。デフォルトで はタイムアウトはありません。
+
+# データソース状態の表示(GUI)
+Runtime->Standalone Server->Datasources->View
+
+# 参考
+https://access.redhat.com/documentation/ja-jp/jboss_enterprise_application_platform/6.1/html/administration_and_configuration_guide/sect-datasource_configuration
+
+# 参考
+http://n-agetsuma.hatenablog.com/entry/2013/02/04/232154
+Webコンソールから作成すると、デフォルトでUse JTA?はfalseになっている。
+この属性がfalseになっていると、データソースから取得したコネクションはautocommit=trueになっていた。
+このため、EJBのコンテナ管理トランザクションがうまく動かず、
+insert/update/deleteするとEJBのトランザクション管理を待たずして即時にコミットされていた。
+
+#
+# トランザクションの設定
+#
+# JTA
+→「# データソース」参照
+
+# トランザクションログメッセージ
+→logging.propertiesファイルのcom.arjuna
+# ログレベル変更
+/subsystem=logging/logger=com.arjuna:write- attribute(name=level,value=DEBUG)
+
+# トランザクションの状態の表示(GUI)
+Runtime->Standalone Server->Transactions->View
+
+#
+# HTTPサーバ
+#
+→undertow
+
+#
+# スレッドプール
+#
+設定が必要と思われる。
+#Runtime->Standalone Server->EJB3->View
+EJB3->View->CONTAINER->Thread Pools->Max threads
+EJB3->View->BEAN POOLS->Max pool size
+# 初期値
+Max threads:10
+mdb-strict-max-pool:Max pool size:20
+slsb-strict-max-pool:Max pool size:20
+
+# 確認
+/subsystem=ejb3/thread-pool=default:read-attribute(name=max-threads)
+/subsystem=ejb3/strict-max-bean-instance-pool=mdb-strict-max-pool:read-attribute(name=max-pool-size)
+/subsystem=ejb3/strict-max-bean-instance-pool=slsb-strict-max-pool:read-attribute(name=max-pool-size)
+
+# スレッド数
+./bin/jboss-cli.sh -c --commands="cd /core-service=platform-mbean/type=threading,ls" | grep thread-count
+
+#
+# 監視
+#
+p282
+
+#
+# JBoss チューニングの考慮事項
+#
+# ホット・デプロイメントのスキャンを使用不可にする。
+Subsystems->Deployment Scanners->View
+Scan enabled: false
+
+準備済みステートメント・キャッシュと接続プーリングをセットアップする。
+適宜 Web コンテナー・スレッド・プールを設定する。currentThreadsBusyパラメーターを監視する。これが増えている場合は、スレッド・プールと接続プールを監視する。
+log4j の設定を削減する (コンソール・アペンダーをオフにする、重大度を WARN から ERROR に下げる)。
+メール・サービスを使用不可にする。
+Hypersonic JBoss EAP 5 データベースを使用不可にする。
+JBoss Messaging を使用していなければ、同様に使用不可にする。
+XA データ・ソースを使用不可にする (Sterling Supply Chain アプリケーションではXA データ・ソースは未使用)。
+不要なら、スケジューラー・サービスを使用不可にする。
+
+###############################################################################
+#　チューニング
+###############################################################################
+#
+# チューニングポイント
+#
+同時接続数
+コネクションタイムアウト
+EJB3
+	XXXBean
+トランザクションタイムアウト
+データソース
+	プール数
+	バリデーション設定
+	タイムアウト
+	ステートメント
+JVM
+
+#
+# パラメータの取得、設定方法
+# 画面右下の「Tools→Management Model」で見ることができる
+#
+# 移動
+cd /subsystem=undertow/server=default-server/http-listener=default
+# 値の取得
+:read-attribute(name=max-connections)
+# 値の設定
+:write-attribute(name=max-connections, value=100)
+
+#
+# ツールでの測定
+#
+# procのr, b、swap in/out、cpuのidleを監視
+vmstat -n 1
+
+# メモリの内容をリアルタイムに表示
+jstat -gcutil -h3 ${pid} 1000
+--------------------------------------------------------------------------------
+S0     S1     E      O      M     CCS    YGC     YGCT    FGC    FGCT     GCT
+58.51   0.00   8.47  70.36  90.56  80.48     12    0.489     1    0.259    0.748
+58.51   0.00   8.47  70.36  90.56  80.48     12    0.489     1    0.259    0.748
+--------------------------------------------------------------------------------
+E: new領域 -> ここが足りなくなるとGC(定期的に起こる)
+O: old領域 -> ここが足りなくなるとOOME
+YGC: 若い世代のGCイベント数
+FGC: フルGCイベント数
+
+# スレッドの一覧
+jstack ${pid} \
+| grep java.lang.Thread.State \
+| awk '{print $2}' \
+| sort \
+| uniq -c \
+| awk '{print $0; a += $1}END{ print "total: ", a}'
+jstack $(jps|grep jboss | awk '{print $1}') | grep '^"' | wc -l
+
+# CPU利用率の高いスレッド順に表示(-k11を変えれば、メモリもできるハズ)
+pid=<プロセス番号>
+join -1 1 -2 1 -e "" <(top -b -n 1 -H -p ${pid} | sed 's/^ *//' | grep '^[0-9]' | sort) <(jstack ${pid} | grep '^"' | sed -n 's/^\("[^"]*"\).* nid=\(0x[0-9a-f]*\) .*/\2 \1/p' | awk '{$1 = strtonum($1); print $0}' | sed 's/^ *//' | sort) | sort -k11 -r | head -10
+
+# 中間ファイルを使ったバージョン
+pid=$(jps|grep jboss | awk '{print $1}')
+top -b -n 1 -H -p ${pid} | sed 's/^ *//' | grep '^[0-9]' | sort > a.txt
+jstack ${pid} | grep '^"' | sed -n 's/^\("[^"]*"\).* nid=\(0x[0-9a-f]*\) .*/\2 \1/p' | awk '{$1 = strtonum($1); print $0}' | sed 's/^ *//' | sort > b.txt
+join -1 1 -2 1 -e "" a.txt b.txt | sort -nk11 -r | head -10
+
+# スレッドの情報を表示(役に立たないかも)
+./bin/jboss-cli.sh -c --commands="cd /core-service=platform-mbean/type=threading,ls"
+
+#
+# チューニング対象のアプリケーション(myapp.war)
+#
+・DBへのアクセスと、1秒間隔のスリープ、セッションへの値の取得設定をするRESTアプリ。
+・負荷は、JMeterにて、「100リクエスト/秒」を10回連続で。
+
+#
+# チューニング内容
+#
+# Max connections: default->300
+/subsystem=undertow/server=default-server/http-listener=default:read-attribute(name=max-connections)
+/subsystem=undertow/server=default-server/http-listener=default:write-attribute(name=max-connections,value=300)
+※100は、正常。50にした場合、エラー
+実際は、以下の、HTTPサーバからの接続数をチューニングする必要がある。
+(今回は、HTTPサーバを立てていないため)
+#/subsystem=undertow/server=default-server/ajp-listener=*
+
+# Max threads: 10->300
+/subsystem=ejb3/thread-pool=default:read-attribute(name=max-threads)
+/subsystem=ejb3/thread-pool=default:write-attribute(name=max-threads,value=300)
+※50にしても、正常に動作
+
+# Max pool size: 20->300
+/subsystem=ejb3/strict-max-bean-instance-pool=slsb-strict-max-pool:read-attribute(name=max-pool-size)
+/subsystem=ejb3/strict-max-bean-instance-pool=slsb-strict-max-pool:write-attribute(name=max-pool-size, value=300)
+※100は、正常。50にした場合、エラー(JITが十分に動いた後は正常)
+
+# Task max threads: 32->200
+/subsystem=io/worker=default:read-attribute(name=task-max-threads)
+/subsystem=io/worker=default:write-attribute(name=task-max-threads,value=200)
+デフォルトは、利用可能CPU数 * 16
+※100は、正常。50にした場合、エラー
+
+# Initial Pool Size: default -> 100
+# Min pool size: default -> 100
+# Max pool size: default -> 100
+/subsystem=datasources/data-source=PostgresDS:read-attribute(name=initial-pool-size)
+/subsystem=datasources/data-source=PostgresDS:read-attribute(name=min-pool-size)
+/subsystem=datasources/data-source=PostgresDS:read-attribute(name=max-pool-size)
+/subsystem=datasources/data-source=PostgresDS:write-attribute(name=initial-pool-size,value=100)
+/subsystem=datasources/data-source=PostgresDS:write-attribute(name=min-pool-size,value=100)
+/subsystem=datasources/data-source=PostgresDS:write-attribute(name=max-pool-size,value=100)
+※50にしても、正常に動作
+
+# Management Modelから変更できず
+/subsystem=transactions
+Configuration: Subsystems Subsystem: Transactions
+変更なし
+→トランザクションタイムアウト：p313
+
+# ヒープサイズを設定(下記の値は、適当)
+./bin/standalone.conf
+-Xms1024m -Xmx1024m
+
+# GCログを設定(本番では、外す)
+./bin/standalone.conf
+GC_LOG="true"
+
+#
+# GUIツールでのリモートからの測定
+# (接続できなかった)
+#
+./bin/standalone.sh \
+-Dcom.sun.management.jmxremote \
+-Djava.rmi.server.hostname=192.168.100.78 \
+-Dcom.sun.management.jmxremote.port=9999 \
+-Dcom.sun.management.jmxremote.rmi.port=9999 \
+-Dcom.sun.management.jmxremote.authenticate=false \
+-Dcom.sun.management.jmxremote.ssl=false
+
+JMX Bean は、システムプロパティー com.sun.management.jmxremote を true に
+設定することにより JConsole を使用してリモートでアクセスできます。
+
+#
+# jvisualvmからの接続
+#
+JMX接続を追加
+SSL接続を使用しない
+「ツール→プラグイン」でMbeanも参照可能
+
+#
+# jconsole
+#
+https://docs.oracle.com/javase/jp/6/technotes/guides/management/faq.html#linux1
+
+#
+# jmxterm
+#
+http://blog.pepese.com/entry/20150115/1421321710
+# オープン
+open localhost:9999
+# ドメイン一覧
+domains
+# MBean一覧表示
+beans -d com.sun.management
+# MBeanの情報を表示
+info -b type=HotSpotDiagnostic -d com.sun.management
+# MBeanから属性一覧を取得
+get -b type=HotSpotDiagnostic -d com.sun.management *
+get -b type=HotSpotDiagnostic -d com.sun.management DiagnosticOptions
+# シェルから実行
+echo 'get -b type=HotSpotDiagnostic -d com.sun.management DiagnosticOptions' | java -jar jmxterm-1.0.0-uber.jar -l localhost:9999
+
+###############################################################################
+# Apacheとの連携
+###############################################################################
+http://nekop.hatenablog.com/entry/20111209/1323431706
+http://www.javadera.com/blog/apache-wildfly%E3%81%AE%E9%80%A3%E6%90%BA%E6%96%B9%E6%B3%95/
+http://rikutoto.blogspot.jp/2013/06/jboss-as-7apache.html
+
+# コネクタの種類
+http://nekop.hatenablog.com/entry/20111209/1323431706
+・mod_jk
+・mod_proxy_ajp
+・mod_cluster
+→mod_clusterの必要はない。
+
+# インストール
+yum install -y httpd
+# 起動
+/usr/sbin/httpd
+→ServerNameの設定が必要
+AH00558: httpd: Could not reliably determine the server's fully qualified domain name, using 192.168.0.3. Set the 'ServerName' directive globally to suppress this message
+
+# モジュールの確認
+ls /etc/httpd/modules
+→LoadModule proxy_module modules/mod_proxy.so
+→LoadModule proxy_ajp_module modules/mod_proxy_ajp.so
+
+# モジュールを組み込む
+sed -i 's:# *\(LoadModule proxy_module modules/mod_proxy.so\):\1:' /etc/httpd/conf/httpd.conf
+sed -i 's:# *\(LoadModule proxy_ajp_module modules/mod_proxy_ajp.so\):\1:' /etc/httpd/conf/httpd.conf
+→以下のメッセージが出てたので、上記の修正は不要
+[Tue Dec 05 10:24:41.466797 2017] [so:warn] [pid 913] AH01574: module proxy_module is already loaded, skipping
+[Tue Dec 05 10:24:41.466901 2017] [so:warn] [pid 913] AH01574: module proxy_ajp_module is already loaded, skipping
+
+# 設定ファイル読み込み追加
+sed -i '/^Include/a include conf/extra/httpd-proxy.conf' /etc/httpd/conf/httpd.conf
+
+# 設定ファイル作成
+mkdir /etc/httpd/conf/extra
+cat << EOF > /etc/httpd/conf/extra/httpd-proxy.conf
+<Location /myapp/>
+    ProxyPass ajp://localhost:8009/myapp/
+</Location>
+EOF
+
+# ajpの設定
+# Wildwfyでは、不要だと思われる
+# /opt/wildfly/standalone/configuration/standalone.xml
+①があったので、設定しない。
+<subsystem xmlns="urn:jboss:domain:web:1.1" default-virtual-server="default-host" native="false">
+	  <connector name="http" protocol="HTTP/1.1" scheme="http" socket-binding="http"/>
+	  <connector name="ajp" protocol="AJP/1.3" scheme="http" socket-binding="ajp"/>−①
+	  <virtual-server name="default-host" enable-welcome-root="true">
+
+# ajpの設定
+sed -i '/<subsystem xmlns="urn:jboss:domain:undertow:/,/<\/subsystem>/{
+  /<server name=/{
+    a <ajp-listener name="ajpListner" scheme="http" socket-binding="ajp"/>
+  }
+}' /opt/wildfly/standalone/configuration/standalone.xml
+
+###############################################################################
+#　チューニング(Apache連携)
+###############################################################################
+# ajpのコネクション数
+/subsystem=undertow/server=default-server/ajp-listener=ajpListner
+Max connections: default->5
+→エラーとなる
+→httpdの接続数(入り口)で絞れば良いので、この値はデフォルトの値(未設定)を使う。
+
+# httpdプロセス数(接続数と近い)
+https://qiita.com/nownabe/items/1111cc32da9fe63289f0
+cat << EOF >> /etc/httpd/conf/httpd.conf
+MaxClients 100
+MinSpareServers 100
+MaxSpareServers 100
+EOF
+→チューニング対象のアプリケーションが正常に動く(httpdのプロセスが上がるまで待つ必要あり)
+→以下の「# メモリ」量からすると、もう少し増やしても良い
+
+# メモリ
+httpd 1プロセスあたりのメモリ使用量はtopコマンドでおおまかに把握することができます
+topコマンドで表示されるRES（物理メモリ使用量）です
+単位はKB
+→6MB
+
+性能が足りない場合、今回のAPの特性からすると、
+KeepAliveTimeout（デフォルト: 15）
+を下げても良いと思われる。
+
+###############################################################################
+#　チューニング(FULL GC頻発->落ちる)
+###############################################################################
+# JMeterでリクエストを送信し続けると、
+# full gcが頻発、何が原因?
+
+# GCログを設定(本番では、外す)
+./bin/standalone.conf
+GC_LOG="true"
+
+GCViewerで監視
+
+# 最低限、これくらいは必要
+-Xms96m -Xmx96m
+起動時にfull gcが発生するが、問題ない。
+
+# メモリの内容をリアルタイムに表示
+jstat -gcutil -h3 ${pid} 3000 | tee /tmp/jstat.log
+
+# 意図的にFULL GCを発生させる
+jcmd ${pid} GC.run
+
+#
+# 実行中の情報を取得
+#
+http://www.hitachi-solutions.co.jp/redhat/sp/column/vol07/
+
+# データソース
+/subsystem=datasources/data-source=PostgresDS/statistics=pool:read-resource(include-runtime=true, recursive=true)
+/subsystem=datasources/data-source=PostgresDS/statistics=jdbc:read-resource(include-runtime=true, recursive=true)
+
+# データソース
+./bin/jboss-cli.sh -c --commands="cd /subsystem=datasources/data-source=PostgresDS/statistics=pool/,ls"
+(statistics-enabledをtrueにする必要がある)
+
+# スレッド
+./bin/jboss-cli.sh -c --commands="cd /core-service=platform-mbean/type=threading,ls"
+
+# メモリ
+./bin/jboss-cli.sh -c --commands="cd /core-service=platform-mbean/type=memory,ls"
+
+#
+# heapダンプを取得
+#
+pid=$(jps | grep jboss | awk '{print $1}')
+jmap -dump:format=b,file=/work/heap-dump.dat ${pid}
+#jhat /work/heap-dump.dat
+jvisualvm
+→時間を開けて、2回取得する。
+→セッションスコープのオブジェクトが解放されていないことが判明
+
+# セッションの保持時間を変更
+/subsystem=undertow/servlet-container=default:read-attribute(name=default-session-timeout)
+/subsystem=undertow/servlet-container=default:write-attribute(name=default-session-timeout,value=5)
+→FULL GC頻発は、解決
+
+###############################################################################
+#　チューニング(OutOfMemory, httpdでエラー)
+###############################################################################
+# ダウンロード(1MB)
+/myapp/service/main/download
+
+# メモリを増やす
+-Xms256m -Xmx256m
+→OutOfMemory解消
+
+# JMeterで100スレッド/秒とするとhttpdでエラー
+待ち受けプロセスを増やす
+MaxClients 100
+MinSpareServers 100
+MaxSpareServers 100
+→httpdでエラーは、解決
+
+###############################################################################
+#　チューニング(起動直後に、大量リクエストでエラー)
+###############################################################################
+# JITの影響であるかを確かめるためにJVMのオプションを設定してJITを起動させない
+-Djava.compiler=none
+→よりエラーが出るようになった
+
+# httpdのpreforkを確認
+apachectl -V|grep 'Server MPM'
+→preforkになっている。問題ない
+
+# 起動直後のhttpdプロセス数を確認
+ps -ef | grep '[h]ttpd' | wc -l
+→問題ない
+
+# httpdだけ、再起動
+→エラーが発生しない
+→原因は、Wildfly側
+
+# Wildflyだけ、再起動。8080にアクセス
+→エラーが発生
+→原因は、Wildfly側
+
+# あらかじめ、緩めの負荷をかけておく
+!/bin/bash
+while true
+do
+    curl http:///localhost:80/myapp/service/main/foo?id=1
+    sleep 1
+done
+→エラーが発生しない
+→JITが原因と思われる。ウォームアップが必要
+
+コードキャッシュサイズ
+http://luozengbin.github.io/blog/2015-09-01-%5Btips%5D%5Bjava%5Dcodecache%E9%A0%98%E5%9F%9F%E4%BD%BF%E7%94%A8%E7%8A%B6%E6%B3%81%E3%81%AE%E7%A2%BA%E8%AA%8D%E6%96%B9%E6%B3%95.html
+
+###############################################################################
+# 性能測定(sar)
+###############################################################################
+# javaのヒープに関しては、jstatで計測
+
+#
+# kSarによるグラフ表示
+#
+#http://d.hatena.ne.jp/japanrock_pg/20090415/1239795768
+yum install -y sysstat
+# Usage: sar [ options ] [ <interval> [ <count> ] ]
+env LANG=C sar -A -o /work/sar.out 3 60 > /dev/null
+env LANG=C sar -A -f /work/sar.out > /work/sar.txt
+kSar起動
+sar.txtの読み込み
+
+#
+# CSV化
+#
+# http://d.hatena.ne.jp/miyakawa_taku/20140202/1391330618
+sadf -T -- -A /work/sar.out > /work/sadf.txt
+cat /work/sadf.txt | awk -f /work/sadf.awk > /work/sadf.csv
+→sar.txtを見れば良いのでは。
+
+# sadf.awk
+--------------------------------------------------------------------------------
+BEGIN {
+    FS = OFS = "\t"
+    # Excel で読み込めるように、行末を CR+LF にする
+    ORS = "\r\n"
+    print "date_time", "%usr", "%sys", "%iowait"
+}
+
+function print_record() {
+    print last_date_time, metric["%usr"], metric["%sys"], metric["%iowait"]
+}
+
+NR != 1 && last_date_time != $3 {
+    print_record()
+}
+
+$4 == "all" && $5 ~ /%(usr|sys|iowait)/ {
+    last_date_time = $3
+    metric[$5] = $6
+}
+
+END {
+    print_record()
+}
+--------------------------------------------------------------------------------
+
+###############################################################################
+# ドメイン
+###############################################################################
+
+# all
+./bin/add-user.sh -u admin -p password -g admin
+
+# wildfly1
+cp -p /opt/wildfly/domain/configuration/host-master.xml{,.bak}
+sed -i 's!<inet-address value="${jboss.bind.address.management:127.0.0.1}"/>!<any-address/>!' /opt/wildfly/domain/configuration/host-master.xml
+sed -i 's:</interfaces>:    <interface name="public">\
+            <any-address/>\
+        </interface>\
+    </interfaces>:' /opt/wildfly/domain/configuration/host-master.xml
+
+# wildfly2
+cp -p /opt/wildfly/domain/configuration/host-slave.xml{,.bak}
+sed -i 's!<inet-address value="${jboss.bind.address.management:127.0.0.1}"/>!<any-address/>!' /opt/wildfly/domain/configuration/host-slave.xml
+sed -i 's!<inet-address value="${jboss.bind.address:127.0.0.1}"/>!<any-address/>!' /opt/wildfly/domain/configuration/host-slave.xml
+# echo -n 'password' | openssl enc -base64
+sed -i '/<secret value="[^"]*"\/>/s/"[^"]*"/"cGFzc3dvcmQ="/' /opt/wildfly/domain/configuration/host-slave.xml
+sed -i '/<host xmlns="urn:jboss:domain:5.0">/s/>/ name="admin">/' /opt/wildfly/domain/configuration/host-slave.xml
+
+# wildfly1
+cat << 'EOF' > /tmp/servers.txt
+<servers>
+    <server name="server-one" group="main-server-group"/>
+    <server name="server-two" group="other-server-group">
+        <!--
+          ~  server-two avoids port conflicts by incrementing the ports in
+          ~                  the default socket-group declared in the server-group
+          -->
+        <socket-bindings port-offset="150"/>
+    </server>
+</servers>
+EOF
+sed -i '/<\/jvms>/r /tmp/servers.txt' /opt/wildfly/domain/configuration/host-master.xml
+
+# wildfly1
+./bin/domain.sh --host-config=host-master.xml -Djboss.management.http.port=19990
+
+# wildfly2
+./bin/domain.sh --host-config=host-slave.xml -Djboss.management.http.port=29990 -Djboss.domain.master.address=wildfly1 -Djboss.host.name=slave2
+
+# wildfly1
+./bin/jboss-cli.sh --connect --controller=wildfly1:19990 'deploy --server-groups=main-server-group /tmp/postgresql-42.1.1.jar'
+cat << 'EOF' > /tmp/jboss-cli.txt
+data-source add \
+  --name=PostgresDS \
+  --connection-url=jdbc:postgresql://postgres:5432/postgres \
+  --jndi-name=java:jboss/datasources/myappDS \
+  --driver-name=postgresql-42.1.1.jar \
+  --user-name=postgres \
+  --password=password \
+  --jta=true \
+  --enabled=true \
+  --use-ccm=true \
+  --profile=full
+EOF
+cat /tmp/jboss-cli.txt | /opt/wildfly/bin/jboss-cli.sh --connect --controller=wildfly1:19990
+./bin/jboss-cli.sh --connect --controller=wildfly1:19990 'deploy --server-groups=main-server-group /tmp/myapp.war'
+
+# localhost
+curl http://localhost:18080/myapp/service/main/foo?id=1
+curl http://localhost:28080/myapp/service/main/foo?id=1
+
+###############################################################################
+# ワーク
+###############################################################################
