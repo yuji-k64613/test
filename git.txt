@@ -1,0 +1,42 @@
+# ユーザ作成
+useradd -m git
+passwd git
+useradd -m user1
+passwd user1
+useradd -m user2
+passwd user2
+# ディレクトリ作成
+mkdir -p /var/lib/git
+chmod 777 /var/lib/git
+chown git /var/lib/git
+# リポジトリ作成
+su - git
+cd /var/lib/git
+mkdir my-repo.git
+cd my-repo.git
+git init --bare --shared=0777
+# 初期データ登録
+cd /tmp
+git clone ssh://git@10.0.2.15:22/var/lib/git/my-repo.git
+cd my-repo.git
+echo > README.txt
+git add -A
+git config --global user.email "git@example.com"
+git config --global user.name "git"
+git commit -m init
+git push -u origin master
+cd
+rm -fr /tmp/my-repo/
+exit
+# 動作確認
+su - user1
+mkdir repo
+cd repo
+git clone ssh://user1@10.0.2.15:22/var/lib/git/my-repo.git
+cd my-repo
+echo hello > README.txt
+git add -A
+git config --global user.email "user1@example.com"
+git config --global user.name "user1"
+git commit -m edit
+git push
