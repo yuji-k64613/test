@@ -1,0 +1,124 @@
+https://qiita.com/irasally/items/b3630eb2f7739a05d4bc
+########################################
+# LVMの構成
+########################################
+ボリュームグループ(VG)
+ ↓  物理ボリューム(PV)・・・ハードディスク
+ ↓      物理エクステント(PE)・・・4MB
+ ↓
+論理ボリューム(LV)・・・パーティション
+
+########################################
+# 新規のボリュームグループ(VG)に追加
+########################################
+#
+# VirtualBoxでディスクを追加(/dev/sdb)
+#
+lsscsi > lsscsi1.txt
+# ディスクを追加
+lsscsi > lsscsi2.txt
+# /dev/sdbが追加された事を確認
+diff lsscsi1.txt lsscsi2.txt
+#
+# ボリュームグループ(VG)、物理ボリューム(PV)作成
+# ボリュームグループに/dev/sdbを指定する事で
+# 物理ボリューム(PV)/dev/sdbが追加される
+#
+vgdisplay > vgdisplay1.txt
+pvdisplay > pvdisplay1.txt
+vgcreate myvg /dev/sdb
+vgdisplay > vgdisplay2.txt
+pvdisplay > pvdisplay2.txt
+# myvgが追加された事を確認
+diff vgdisplay1.txt vgdisplay2.txt
+diff pvdisplay1.txt pvdisplay2.txt
+#
+# ボリュームグループ(VG)
+# →上記手順で追加されているため、不要
+#
+#vgextend myvg /dev/sdb
+# PV Name /dev/sdbが追加された事を確認
+#vgdisplay -v myvg
+#
+# ボリュームグループ(VG)から論理ボリューム(LV)を作成
+#
+lvdisplay > lvdisplay1.txt
+lvcreate -n mylv -l 100%FREE myvg
+lvdisplay > lvdisplay2.txt
+# LV Path /dev/myvg/mylvが追加された事を確認
+diff lvdisplay1.txt lvdisplay2.txt
+#
+# フォーマット
+#
+mkfs.ext3 /dev/myvg/mylv
+#
+# マウント
+#
+mount -t ext3 /dev/myvg/mylv /mnt/
+#
+# 確認
+#
+df -h | grep mylv
+#
+# 論理ボリューム(LV)をパーティションに分けて再作成
+#
+# すでに論理ボリューム(LV)があれば削除
+umount /dev/myvg/mylv
+lvremove /dev/myvg/mylv
+#
+lvdisplay > lvdisplay3.txt
+# 論理ボリューム(LV)を作成前に戻った事を確認
+diff lvdisplay1.txt lvdisplay3.txt
+# 論理ボリューム(LV)を作成
+# ext3 signature detected on /dev/myvg/mylv1 at offset 1080
+# 1024 + 48M(ext3)
+lvcreate -n mylv1 -L 1G myvg
+lvcreate -n mylv2 -L 2G myvg
+lvcreate -n mylv3 -l 100%FREE myvg
+# フォーマット
+lvdisplay | grep 'LV Path' | grep myvg
+mkfs.ext3 /dev/myvg/mylv1
+mkfs.ext3 /dev/myvg/mylv2
+mkfs.ext3 /dev/myvg/mylv3
+# マウント
+mkdir /LVM
+mkdir /LVM/lvm1
+mkdir /LVM/lvm2
+mkdir /LVM/lvm3
+mount -t ext3 /dev/myvg/mylv1 /LVM/lvm1
+mount -t ext3 /dev/myvg/mylv2 /LVM/lvm2
+mount -t ext3 /dev/myvg/mylv3 /LVM/lvm3
+# 確認
+df -h
+
+########################################
+# 既存のボリュームグループ(VG)に追加
+########################################
+#
+# ディスクの追加
+#
+# 「/」容量確認
+df -h
+    ファイルシス            サイズ  使用  残り 使用% マウント位置
+    /dev/mapper/centos-root    50G  1.4G   49G    3% /
+# LVの状態を確認
+vgdisplay | grep 'VG Name'
+vgdisplay -v centos
+pvdisplay
+# VirtualBoxでディスクを追加(/dev/sdb)
+lsscsi
+    [0:0:0:0]    disk    ATA      VBOX HARDDISK    1.0   /dev/sda
+    [1:0:0:0]    disk    ATA      VBOX HARDDISK    1.0   /dev/sdb
+pvcreate /dev/sdb
+pvdisplay
+# VGへの登録
+vgextend centos /dev/sdb
+vgdisplay -v centos
+# Logical volumeのLV Pathを指定
+vgdisplay -v centos | grep 'LV Path' | grep root
+lvextend -l +100%FREE /dev/centos/root
+# /dev/centos/rootを追加
+xfs_growfs /
+df -h
+    ファイルシス            サイズ  使用  残り 使用% マウント位置
+    /dev/mapper/centos-root   100G  1.7G   99G    2% /
