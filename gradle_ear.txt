@@ -1,0 +1,155 @@
+#
+# Pojoプロジェクト
+#
+mkdir sampleAppPojo
+cd sampleAppPojo
+gradle init --type java-library
+vi build.gradle
+plugins {
+    id 'eclipse'
+}
+
+./gradlew eclipse
+./gradlew
+
+find src -name "*.java" -exec rm '{}' \;
+mkdir -p src/main/java/com/sample
+vi src/main/java/com/sample/Hello.java
+./gradlew build
+cd ..
+
+#
+# warプロジェクト
+#
+mkdir sampleAppWeb
+cd sampleAppWeb
+gradle init --type java-application
+vi build.gradle
+plugins {
+    id 'war'
+    id 'eclipse'
+    id 'eclipse-wtp'
+}
+distTar.enabled = false
+distZip.enabled = false
+dependencies {
+    // jarプロジェクトを指定
+    compile project(path: ':sampleAppPojo', configuration: 'archives')
+
+    compile "javax:javaee-web-api:8.0"
+    compile "javax.ws.rs:javax.ws.rs-api:2.1.1"
+    compile "javax.servlet:javax.servlet-api:4.0.0"
+}
+war {
+    archiveName = "sampleAppWeb.war"
+}
+
+vi settings.gradle
+includeFlat 'sampleAppPojo'
+
+find src -name "*.java" -exec rm '{}' \;
+mkdir -p src/main/java/com/sample
+vi src/main/java/com/sample/Main.java
+
+./gradlew eclipse
+./gradlew eclipseWtp
+./gradlew war
+cd ..
+
+#
+# earプロジェクト
+#
+mkdir sampleAppEar
+cd sampleAppEar
+gradle init --type java-application
+vi build.gradle
+plugins {
+    //id 'application'
+    id 'ear'
+    id 'eclipse'
+    id 'eclipse-wtp'
+}
+//mainClassName = 'App'
+dependencies {
+    // warプロジェクトを指定
+    deploy project(path: ':sampleAppWeb', configuration: 'archives')
+}
+ear {
+    deploymentDescriptor {
+        applicationName = "sampleApp"
+        initializeInOrder = true
+        displayName = "sampleApp Ear"
+    }
+}
+
+vi settings.gradle
+includeFlat 'sampleAppWeb', 'sampleAppPojo'
+
+find src -name "*.java" -exec rm '{}' \;
+./gradlew eclipse
+./gradlew eclipseWtp
+./gradlew ear
+
+#
+# デプロイ
+#
+vi build.gradle
+---------------------------------------------------------
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'org.hidetake:gradle-ssh-plugin:2.9.0'
+    }
+}
+
+plugins {
+    id 'java'
+    id 'ear'
+    id 'eclipse'
+    id 'eclipse-wtp'
+}
+
+apply plugin: 'org.hidetake.ssh'
+remotes {
+    hostA {
+        host = '127.0.0.1'
+        user = '@@@USER@@@'
+        password = '@@@PASSWORD@@@'
+    }
+}
+
+dependencies {
+    // warプロジェクトを指定
+    deploy project(path: ':sampleAppWeb', configuration: 'archives')
+}
+
+repositories {
+    jcenter()
+}
+
+ear {
+    deploymentDescriptor {
+        applicationName = "sampleApp"
+        initializeInOrder = true
+        displayName = "sampleApp Ear"
+    }
+}
+
+task deploy(dependsOn: 'ear') << {
+  def earname = "sampleAppEar.ear"
+  def localFile = "./build/libs/${earname}"
+  def uploadDir = "/Users/konishiyuji/tmp/z"
+  def wildfly_home = "/Users/konishiyuji/local/wildfly"
+  ssh.run {
+    session(remotes.hostA) {
+      put from: localFile, into: uploadDir
+      execute "${wildfly_home}/bin/jboss-cli.sh --connect 'deploy -f ${uploadDir}/${earname}'"
+    }
+  }
+}
+
+defaultTasks 'ear'
+---------------------------------------------------------
+http://localhost:8080/sampleAppWeb/service/main/foo?id=1
