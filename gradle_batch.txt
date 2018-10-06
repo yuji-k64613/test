@@ -1,0 +1,35 @@
+#
+# Batchプロジェクト
+#
+mkdir sampleBatchMain
+cd sampleBatchMain
+gradle init --type java-application
+vi build.gradle
+plugins {
+    id 'eclipse'
+}
+mainClassName = 'com.sample.Main'
+jar {
+    manifest {
+        attributes 'Main-Class': 'com.sample.Main'
+    }
+}
+
+find src -name "*.java" -exec rm '{}' \;
+mkdir -p src/main/java/com/sample
+vi src/main/java/com/sample/Main.java
+package com.sample;
+public class Main {
+    public String hello() {
+        return "Hello world.";
+    }
+
+    public static void main(String[] args) {
+        System.out.println(new Main().hello());
+    }
+}
+
+./gradlew eclipse
+./gradlew build
+java -jar build/libs/sampleBatchMain.jar 
+cd ..

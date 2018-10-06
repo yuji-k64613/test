@@ -1,0 +1,121 @@
+#
+# add
+#
+# 追加されるものを表示
+git add --dry-run
+
+#
+# diff
+#
+# ディレクトリとステージング
+git diff
+# ステージングとコミット
+git diff --staged
+# ディレクトリとコミット
+git diff HEAD
+# ブランチの比較
+git diff <branch>...<branch>
+
+#
+# reset
+#
+# ステージングから削除
+git reset
+# ステージングから削除(ディレクトリにも反映)
+git reset --hard
+
+#
+# checkout
+#
+# 最後のコミットに戻す
+git checkout
+# 過去のコミットを参照?
+git checkout <SHA1_ID>
+
+master
+最後のcommitへのポインタ
+HEAD
+現在のポインタ?
+
+#
+# branch
+#
+# コミットからブランチを作成
+git branch <branch名> <SHA1_ID>
+
+#
+# merge
+#
+git merge --abort
+#
+--allow-unrelated-histories
+
+#
+# リモート
+#
+リモート追跡ブランチ: remotes/origin/master
+git ls-remote .
+git ls-remote <リモート>
+git remote -v show origin
+
+#
+# rebase
+#
+# fast-forward(ブランチのmerge)
+git checkout <branch>
+git rebase master
+git checkout master
+git merge <branch> --ff-only
+# fast-forward(pull)
+git fetch
+git rebase FETCH_HEAD
+git merge FETCH_HEAD --ff-only
+# 競合の解消
+git add <競合したファイル>
+git rebase --continue
+
+#
+# pull
+#
+# fetch&merge
+git fetch
+git diff HEAD..FETCH_HEAD
+git merge FETCH_HEAD
+# fast-forward
+git pull --ff-only
+
+#
+# 取り消し
+#
+# commitの取り消し
+git reset --hard HEAD^
+push -f
+
+# ステージングの削除
+git reset
+git reset HEAD
+
+# commitから取得
+git checkout -- .
+
+# 管理対象から削除
+git rm --cached
+
+# ファイルごと削除
+git rm
+
+# 差分を表示
+git log --patch
+# ファイル名
+git log --stat
+# ファイルでフィルター
+git log <ファイル名>
+# 最新
+git log HEAD^..HEAD
+git log -1
+git log -n 1
+# 検索
+git log --grep=<word>
+#　ALL
+git log --graph --decorate --all --abbrev-commit
+
