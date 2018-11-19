@@ -1,0 +1,94 @@
+#
+# サブツリー
+# subが先にある場合
+#
+mkdir sub.git
+cd sub.git
+git init --bare
+cd ..
+git clone sub.git
+cd sub
+echo sub > sub.txt
+git add -A
+git commit -m init
+git push
+cd ..
+
+mkdir main.git
+cd main.git
+git init --bare
+cd ..
+git clone main.git
+cd main
+echo main > README.txt
+git add -A
+git commit -m init
+git push
+cd ..
+
+cd main
+git remote add subproj ../sub.git
+git subtree add --prefix=sub subproj master
+cd ..
+
+cd sub
+echo sub2 >> sub.txt
+git add -A
+git commit -m sub2
+git push
+cd ..
+
+cd main
+git subtree pull --squash --prefix=sub subproj master
+git push
+cd ..
+
+cd main
+echo main >> sub/sub.txt
+git add -A
+git commit -m main
+git push
+git subtree push --prefix=sub subproj master
+cd ..
+
+#
+# サブツリー
+# mainが先にある場合
+#
+mkdir main.git
+cd main.git
+git init --bare
+cd ..
+git clone main.git
+cd main
+echo main > README.txt
+mkdir sub
+echo main > sub/sub.txt
+git add -A
+git commit -m init
+git push
+cd ..
+
+mkdir sub.git
+cd sub.git
+git init --bare
+cd ..
+git clone sub.git
+
+cd main
+git subtree split --prefix=sub --rejoin
+git remote add subproj ../sub.git
+git subtree push --prefix=sub subproj master
+cd ..
+
+cd sub
+git pull
+echo sub >> sub.txt
+git add -A
+git commit -m sub
+git push
+cd ..
+
+cd main
+git subtree pull --squash --prefix=sub subproj master
+cd ..
