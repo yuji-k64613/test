@@ -1,0 +1,42 @@
+#
+# Jenkinsのジョブをリモートからの実行する手順(http)
+#
+Manage Jenkins->Manage Users->「ギア」のアイコン
+API Token->Add new Token->Generate
+#
+token=111a4c0058ad6b203c5a27143b294a513b
+user=admin
+# パラメータなし
+curl -X POST --user "${user}:${token}" http://localhost:8080/job/main/build
+# パラメータあり
+curl -X POST --user "${user}:${token}" http://localhost:8080/job/main/buildWithParameters?BRANCH=master
+# 状態を取得
+curl -X POST --user "${user}:${token}" http://localhost:8080/job/main/api/json?depth=1 | python -m json.tool
+
+#
+# Jenkinsのジョブをリモートからの実行する手順(ssh)
+#
+Manage Jenkins->Configure Global Security->SSH Server->SSHD Port
+「8081」を設定する(任意の値で良い)
+#
+Manage Jenkins->Manage Users->「ギア」のアイコン
+SSH Public Keys->SSH Public Keys
+「~/.ssh/id_rsa.pub」をペースト
+#
+JENKINS_SSHD_PORT=8081
+JENKINS_HOSTNAME=localhost
+JENKINS_USER=admin
+JENKINS_PASSWORD=password
+#
+ssh -p ${JENKINS_SSHD_PORT} ${JENKINS_USER}@${JENKINS_HOSTNAME} help
+ssh -p ${JENKINS_SSHD_PORT} ${JENKINS_USER}@${JENKINS_HOSTNAME} help <コマンド>
+#
+# Jenkinsfile構文チェック
+#
+ssh -p ${JENKINS_SSHD_PORT} ${JENKINS_USER}@${JENKINS_HOSTNAME} declarative-linter < Jenkinsfile
+
+#
+# Jenkinsのジョブをリモートからの実行する手順(jenkins-cli.jar)
+#
+java -jar jenkins-cli.jar -auth ${JENKINS_USER}:${JENKINS_PASSWORD} -s http://${JENKINS_HOSTNAME}:8080/ build main
+
