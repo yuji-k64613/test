@@ -2,7 +2,8 @@
 # add
 #
 # 追加されるものを表示
-git add --dry-run
+git add --dry-run -A
+git add -n -A
 
 #
 # diff
@@ -20,22 +21,24 @@ git diff <branch>...<branch>
 # reset
 #
 # ステージングから削除
-git reset
-# ステージングから削除(ディレクトリにも反映)
-git reset --hard
+git reset .
+git reset -- <file>
+# コミットを戻す
+git reset --hard HEAD^
+# コミットを戻す(修正しない。ステージングのまま)
+git reset HEAD^
 
 #
 # checkout
 #
-# 最後のコミットに戻す
-git checkout
-# 過去のコミットを参照?
+# 修正されたファイルをコミット＆ステージングされた状態に戻す
+git checkout -- .
+# 過去のコミット
 git checkout <SHA1_ID>
-
-master
-最後のcommitへのポインタ
-HEAD
-現在のポインタ?
+# コンフリクトの解決(カレントのブランチのfileで更新)
+git checkout --ours <file>
+# コンフリクトの解決(マージするブランチのfileで更新)
+git checkout --theirs <file>
 
 #
 # branch
@@ -46,8 +49,11 @@ git branch <branch名> <SHA1_ID>
 #
 # merge
 #
+# マージの中止
 git merge --abort
-#
+# コンフリクトするか事前に確認
+git merge --no-commit <branch>
+# clone以外へマージ
 --allow-unrelated-histories
 
 #
@@ -119,3 +125,6 @@ git log --grep=<word>
 #　ALL
 git log --graph --decorate --all --abbrev-commit
 
+#
+# checrry-pick
+#
