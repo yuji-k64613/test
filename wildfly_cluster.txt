@@ -1,0 +1,25 @@
+cd /opt/wildfly
+cp -a standalone cl-std-node-1
+cp -a standalone cl-std-node-2
+sed -i 's!<inet-address value="${jboss.bind.address.management:127.0.0.1}"/>!<any-address/>!' ./cl-std-node-1/configuration/standalone-ha.xml
+sed -i 's!<inet-address value="${jboss.bind.address:127.0.0.1}"/>!<any-address/>!' ./cl-std-node-1/configuration/standalone-ha.xml
+sed -i 's!<inet-address value="${jboss.bind.address.management:127.0.0.1}"/>!<any-address/>!' ./cl-std-node-2/configuration/standalone-ha.xml
+sed -i 's!<inet-address value="${jboss.bind.address:127.0.0.1}"/>!<any-address/>!' ./cl-std-node-2/configuration/standalone-ha.xml
+cp /vagrant/cluster-test.war cl-std-node-1/deployments/
+cp /vagrant/cluster-test.war cl-std-node-2/deployments/
+./bin/standalone.sh \
+    -Djboss.server.base.dir=cl-std-node-1 \
+    --server-config=standalone-ha.xml \
+    -Djboss.socket.binding.port-offset=100 \
+    -Djboss.node.name=node-1
+./bin/standalone.sh \
+    -Djboss.server.base.dir=cl-std-node-2 \
+    --server-config=standalone-ha.xml \
+    -Djboss.socket.binding.port-offset=200 \
+    -Djboss.node.name=node-2
+http://192.168.33.150:8180/cluster-test
+http://192.168.33.150:8280/cluster-test
+java -cp ./modules/system/layers/base/org/jgroups/main/jgroups-4.0.18.Final.jar org.jgroups.tests.McastReceiverTest
+java -cp ./modules/system/layers/base/org/jgroups/main/jgroups-4.0.18.Final.jar org.jgroups.tests.McastSenderTest
+#web.xml
+#<distributable/>
