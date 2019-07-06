@@ -1,0 +1,16 @@
+# master
+su - postgres
+cd /usr/local/pgsql/data
+sed -i 's/#wal_level = replica/wal_level = logical/' postgresql.conf
+exit
+systemctl restart postgresql
+
+# master
+su - postgres
+psql -U postgres -W mydb
+CREATE PUBLICATION mypub FOR TABLE person;
+
+# slave
+psql -U postgres -W mydb
+#create table person (id int primary key, name varchar(20));
+CREATE SUBSCRIPTION mysub CONNECTION 'dbname=mydb host=192.168.33.200 user=dbuser password=dbuser' PUBLICATION mypub;
