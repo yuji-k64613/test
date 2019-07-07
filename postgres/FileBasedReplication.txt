@@ -1,0 +1,67 @@
+# master
+# slave
+systemctl stop postgresql
+
+# master
+su - postgres
+ssh-keygen -t rsa
+ssh-copy-id 192.168.33.201
+# 確認
+ssh 192.168.33.201
+ip a | grep 201
+exit
+
+# slave
+mkdir /archive
+chown postgres:postgres /archive
+rm -fr /usr/local/pgsql/data
+mkdir /usr/local/pgsql/data
+mkdir /usr/local/pgsql/data/pg_wal
+chown -R postgres:postgres /usr/local/pgsql/data
+
+# master
+cd /usr/local/pgsql/data
+cat << EOF >> postgresql.conf
+wal_level = 'archive'
+archive_mode = on
+archive_command = 'scp %p 192.168.33.201:/archive/%f'
+archive_timeout = 30
+log_connections = on
+EOF
+exit
+systemctl start postgresql
+#
+su - postgres
+psql -U postgres -W mydb
+create table person (id int primary key, name varchar(20));
+insert into person values (10, 'foo');
+insert into person values (20, 'bar');
+exit
+#
+psql -c "select pg_start_backup('base backup for log shipping')"
+rsync -cva --inplace --exclude="*pg_wal*" --exclude=postmaster.pid /usr/local/pgsql/data 192.168.33.201:/usr/local/pgsql
+psql -c "select pg_stop_backup(), current_timestamp"
+exit
+# 障害発生
+systemctl stop postgresql
+
+# slave
+ls /archive/
+#
+su - postgres
+cd /usr/local/pgsql/data
+cat << EOF >> postgresql.conf
+log_connections = on
+EOF
+cat << EOF > recovery.conf
+standby_mode = 'on'
+restore_command = 'cp /archive/%f %p'
+archive_cleanup_command = 'pg_archivecleanup /archive %r'
+EOF
+exit
+systemctl start postgresql
+# 確認
+su - postgres
+psql -U postgres -W mydb
+select * from person;
+exit
