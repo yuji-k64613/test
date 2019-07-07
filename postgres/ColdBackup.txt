@@ -1,0 +1,24 @@
+#
+# バックアップ
+#
+su - postgres
+pg_dumpall > outputfile
+exit
+systemctl stop postgresql
+#
+# 障害発生
+#
+mv /usr/local/pgsql/data /usr/local/pgsql/data.bak
+#
+# リストア
+#
+mkdir /usr/local/pgsql/data
+chown postgres:postgres /usr/local/pgsql/data
+su - postgres
+/usr/local/pgsql/bin/initdb -D /usr/local/pgsql/data
+exit
+systemctl start postgresql
+su - postgres
+/usr/local/pgsql/bin/psql -d postgres -f outputfile
+psql -U postgres -W mydb
+select * from person;

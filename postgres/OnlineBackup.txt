@@ -1,0 +1,58 @@
+# WALの格納先
+rm -fr /archive
+mkdir /archive
+chown postgres:postgres /archive
+# バックアップディレクトリ
+rm -fr /backup
+mkdir /backup
+chown postgres:postgres /backup
+#
+# WAL設定
+#
+su - postgres
+cd /usr/local/pgsql/data
+#archive_command = 'test ! -f /backup/backup_in_progress || (test ! -f /archive/%f && cp %p /archive/%f)'
+sed -i 's:^#archive_command = '\'\'':archive_command = '\''test ! -f /backup/backup_in_progress || (test ! -f /archive/%f \&\& cp %p /archive/%f)'\'':' postgresql.conf
+sed -i 's/^#archive_mode = off/archive_mode = on/' postgresql.conf
+sed -i 's/^#wal_level = replica/wal_level = archive/' postgresql.conf
+exit
+systemctl restart postgresql
+#
+# バックアップ
+#
+su - postgres
+cd /usr/local/pgsql/
+touch /backup/backup_in_progress
+psql -c "select pg_start_backup('hot_backup');"
+tar cf /backup/backup.tar data
+# データ投入(バックアップ中)
+psql -U postgres -W mydb
+insert into person values (100, 'foo100');
+insert into person values (101, 'foo101');
+insert into person values (102, 'foo102');
+exit
+#
+psql -c "select pg_stop_backup();"
+rm /backup/backup_in_progress
+cd /
+tar -rf /backup/backup.tar archive
+exit
+#
+# クラッシュ
+#
+systemctl stop postgresql
+mv /usr/local/pgsql/data /usr/local/pgsql/data.bak
+#
+# リカバリ
+#
+cd /usr/local/pgsql
+tar xvf /backup/backup.tar
+rm -fr data/pg_wal/*
+echo "restore_command = 'cp /archive/%f %p'" > data/recovery.conf
+chown postgres:postgres data/recovery.conf
+systemctl start postgresql
+# 確認
+su - postgres
+psql -U postgres -W mydb
+select * from person;
+exit
