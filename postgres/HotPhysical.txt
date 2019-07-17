@@ -1,0 +1,44 @@
+mkdir -p /usr/local/pgsql/standalone/archive/
+chown -R postgres:postgres /usr/local/pgsql/standalone
+su - postgres
+cd /usr/local/pgsql/data
+pg_receivewal -D ../standalone/archive/
+
+# データ更新
+su - postgres
+psql -U postgres -W mydb
+create table person (id int primary key, name varchar(20));
+insert into person values (10, 'foo');
+insert into person values (20, 'bar');
+exit
+#
+cd /usr/local/pgsql/data
+BACKUP_FILENAME=$(date '+%Y%m%d%H%M').tar
+psql -c "select pg_start_backup('standalone')"
+tar -cv --exclude="pg_wal/*" -f ../standalone/$BACKUP_FILENAME *
+psql -c "select pg_stop_backup(), current_timestamp"
+pkill -TERM pg_receivewal
+cd ../standalone
+tar rf $BACKUP_FILENAME archive
+cat << EOF > recovery.conf
+restore_command = 'cp archive/%f %p'
+recovery_end_command = 'rm -R archive'
+EOF
+tar rf $BACKUP_FILENAME recovery.conf
+rm -rf archive recovery.conf
+exit
+# リストア
+systemctl stop postgresql
+rm -fr /usr/local/pgsql/data
+mkdir /usr/local/pgsql/data
+chmod 700 /usr/local/pgsql/data
+chown postgres:postgres /usr/local/pgsql/data
+cd /usr/local/pgsql/data
+tar xvf ../standalone/*.tar
+systemctl start postgresql
+# 確認
+su - postgres
+psql -U postgres -W mydb
+select * from person;
+exit
+exit
